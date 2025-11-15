@@ -1,11 +1,17 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useForm } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
+import * as z from "zod"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { useApp } from "@/app/app-provider"
+import { transferAPI, exchangeRateAPI } from "@/lib/api"
+import { useToast } from "@/hooks/use-toast"
+import { LoadingSpinner } from "@/components/ui/loading-spinner"
 
 type SendMoneyFlowProps = {
   onComplete: () => void
@@ -18,21 +24,91 @@ export function SendMoneyFlow({ onComplete }: SendMoneyFlowProps) {
   const [selectedCountry, setSelectedCountry] = useState("")
   const [selectedMethod, setSelectedMethod] = useState("")
   const [recipientName, setRecipientName] = useState("")
+  const [recipientAccount, setRecipientAccount] = useState("")
   const [amount, setAmount] = useState("")
   const [selectedRoute, setSelectedRoute] = useState("")
   const [selectedPayment, setSelectedPayment] = useState("")
   const [processingStep, setProcessingStep] = useState(0)
-  const { addTransfer } = useApp()
+  const [exchangeRate, setExchangeRate] = useState<number | null>(null)
+  const [isLoadingRate, setIsLoadingRate] = useState(false)
+  const { addTransfer, refreshTransfers, refreshWallets } = useApp()
+  const { toast } = useToast()
+
+  const recipientSchema = z.object({
+    recipientName: z.string().min(2, "Recipient name is required"),
+    recipientAccount: z.string().min(5, "Account number is required"),
+  })
+
+  const amountSchema = z.object({
+    amount: z.string().refine((val) => {
+      const num = Number.parseFloat(val)
+      return !Number.isNaN(num) && num > 0
+    }, "Please enter a valid amount"),
+  })
 
   const countries = ["Nigeria", "Kenya", "Ghana", "Mexico", "India", "Brazil"]
   const methods = ["Mobile Money", "Bank Transfer", "Wallet"]
   const paymentMethods = ["USDC", "Card", "Bank Account"]
 
-  const routes = [
-    { id: "direct", name: "Direct Route", time: "2-3 min", fee: "$0.50", rate: 1500 },
-    { id: "optimal", name: "Optimal (Cheapest)", time: "4-5 min", fee: "$0.25", rate: 1499 },
-    { id: "fast", name: "Fast Track", time: "30-60 sec", fee: "$1.50", rate: 1500 },
-  ]
+  // Get currency code based on country
+  const getCurrencyCode = (country: string): string => {
+    const currencyMap: Record<string, string> = {
+      Nigeria: "NGN",
+      Kenya: "KES",
+      Ghana: "GHS",
+      Mexico: "MXN",
+      India: "INR",
+      Brazil: "BRL",
+    }
+    return currencyMap[country] || "USD"
+  }
+
+  // Fetch exchange rate when country is selected
+  useEffect(() => {
+    if (selectedCountry && step === "amount") {
+      setIsLoadingRate(true)
+      exchangeRateAPI
+        .getRate("USD", getCurrencyCode(selectedCountry), selectedCountry)
+        .then((rate) => {
+          setExchangeRate(rate.rate)
+        })
+        .catch(() => {
+          toast({
+            title: "Failed to fetch rate",
+            description: "Using default rate. Please try again.",
+            variant: "destructive",
+          })
+          setExchangeRate(1500) // Default fallback
+        })
+        .finally(() => {
+          setIsLoadingRate(false)
+        })
+    }
+  }, [selectedCountry, step, toast])
+
+  // Auto-advance processing steps
+  useEffect(() => {
+    if (step === "processing" && processingStep < processingSteps.length - 1) {
+      const timer = setTimeout(() => {
+        setProcessingStep((s) => Math.min(s + 1, processingSteps.length - 1))
+      }, 2000)
+      return () => clearTimeout(timer)
+    } else if (step === "processing" && processingStep === processingSteps.length - 1) {
+      const timer = setTimeout(() => {
+        handleNext()
+      }, 1000)
+      return () => clearTimeout(timer)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, processingStep])
+
+  const routes = exchangeRate
+    ? [
+        { id: "direct", name: "Direct Route", time: "2-3 min", fee: 0.5, rate: exchangeRate },
+        { id: "optimal", name: "Optimal (Cheapest)", time: "4-5 min", fee: 0.25, rate: exchangeRate * 0.999 },
+        { id: "fast", name: "Fast Track", time: "30-60 sec", fee: 1.5, rate: exchangeRate },
+      ]
+    : []
 
   const processingSteps = [
     { label: "Converting to USDC", icon: "💱" },
@@ -57,19 +133,50 @@ export function SendMoneyFlow({ onComplete }: SendMoneyFlowProps) {
     setStep(steps[currentIndex + 1])
   }
 
-  const handleComplete = () => {
+  const handleComplete = async () => {
     if (step === "confirm") {
-      addTransfer({
-        id: "transfer-" + Date.now(),
-        recipient: recipientName,
-        amount: Number.parseFloat(amount),
-        fromCurrency: "USD",
-        toCurrency: "NGN",
-        rate: 1500,
-        status: "completed",
-        createdAt: new Date(),
-      })
-      onComplete()
+      try {
+        const selectedRouteData = routes.find((r) => r.id === selectedRoute)
+        if (!selectedRouteData) {
+          toast({
+            title: "Error",
+            description: "Please select a route",
+            variant: "destructive",
+          })
+          return
+        }
+
+        const transfer = await transferAPI.createTransfer({
+          recipient: recipientName,
+          recipientAccount,
+          amount: Number.parseFloat(amount),
+          fromCurrency: "USD",
+          toCurrency: getCurrencyCode(selectedCountry),
+          rate: selectedRouteData.rate,
+          fee: selectedRouteData.fee,
+          country: selectedCountry,
+          method: selectedMethod,
+          route: selectedRouteData.name,
+        })
+
+        addTransfer(transfer)
+        await refreshTransfers()
+        await refreshWallets()
+
+        toast({
+          title: "Transfer completed!",
+          description: `$${amount} sent successfully`,
+          variant: "success",
+        })
+
+        onComplete()
+      } catch (error) {
+        toast({
+          title: "Transfer failed",
+          description: error instanceof Error ? error.message : "Please try again",
+          variant: "destructive",
+        })
+      }
     } else {
       handleNext()
     }
@@ -144,13 +251,37 @@ export function SendMoneyFlow({ onComplete }: SendMoneyFlowProps) {
           <CardContent className="space-y-4">
             <div>
               <label className="block text-sm font-medium mb-2">Recipient Name</label>
-              <Input placeholder="Full name" value={recipientName} onChange={(e) => setRecipientName(e.target.value)} />
+              <Input
+                placeholder="Full name"
+                value={recipientName}
+                onChange={(e) => setRecipientName(e.target.value)}
+              />
             </div>
             <div>
               <label className="block text-sm font-medium mb-2">Account Number</label>
-              <Input placeholder="Enter account number" />
+              <Input
+                placeholder="Enter account number"
+                value={recipientAccount}
+                onChange={(e) => setRecipientAccount(e.target.value)}
+              />
             </div>
-            <Button onClick={handleComplete} disabled={!recipientName} className="w-full mt-4">
+            <Button
+              onClick={() => {
+                const form = { recipientName, recipientAccount }
+                const result = recipientSchema.safeParse(form)
+                if (result.success) {
+                  handleNext()
+                } else {
+                  const error = result.error.errors[0]
+                  toast({
+                    title: "Validation error",
+                    description: error?.message || "Please fill all fields correctly",
+                    variant: "destructive",
+                  })
+                }
+              }}
+              className="w-full mt-4"
+            >
               Next
             </Button>
           </CardContent>
@@ -162,21 +293,59 @@ export function SendMoneyFlow({ onComplete }: SendMoneyFlowProps) {
         <Card>
           <CardHeader>
             <CardTitle>Enter Amount</CardTitle>
-            <p className="text-sm text-muted-foreground mt-1">Real-time rate: 1 USD = 1,500 NGN</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              {isLoadingRate ? (
+                "Loading rate..."
+              ) : exchangeRate ? (
+                `Real-time rate: 1 USD = ${exchangeRate.toLocaleString()} ${getCurrencyCode(selectedCountry)}`
+              ) : (
+                "Select country first"
+              )}
+            </p>
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
               <label className="block text-sm font-medium mb-2">Amount (USD)</label>
-              <Input type="number" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)} />
+              <Input
+                type="number"
+                step="0.01"
+                placeholder="0.00"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+              />
             </div>
-            {amount && (
+            {amount && exchangeRate && (
               <div className="bg-muted/50 p-3 rounded-lg">
                 <p className="text-sm text-muted-foreground">You'll send</p>
-                <p className="text-2xl font-bold">{(Number.parseFloat(amount) * 1500).toLocaleString()} NGN</p>
+                <p className="text-2xl font-bold">
+                  {(Number.parseFloat(amount) * exchangeRate).toLocaleString()} {getCurrencyCode(selectedCountry)}
+                </p>
               </div>
             )}
-            <Button onClick={handleComplete} disabled={!amount} className="w-full mt-4">
-              Next
+            <Button
+              onClick={() => {
+                const result = amountSchema.safeParse({ amount })
+                if (result.success && exchangeRate) {
+                  handleNext()
+                } else {
+                  toast({
+                    title: "Invalid amount",
+                    description: "Please enter a valid amount greater than 0",
+                    variant: "destructive",
+                  })
+                }
+              }}
+              disabled={!amount || !exchangeRate || isLoadingRate}
+              className="w-full mt-4"
+            >
+              {isLoadingRate ? (
+                <>
+                  <LoadingSpinner className="mr-2" />
+                  Loading...
+                </>
+              ) : (
+                "Next"
+              )}
             </Button>
           </CardContent>
         </Card>
@@ -203,9 +372,9 @@ export function SendMoneyFlow({ onComplete }: SendMoneyFlowProps) {
                     <p className="text-xs text-muted-foreground">{route.time}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-sm font-medium">{route.fee}</p>
+                    <p className="text-sm font-medium">${route.fee.toFixed(2)}</p>
                     <Badge variant="outline" className="mt-1">
-                      1 USDC = {route.rate} NGN
+                      1 USD = {route.rate.toFixed(2)} {getCurrencyCode(selectedCountry)}
                     </Badge>
                   </div>
                 </div>
@@ -330,21 +499,21 @@ export function SendMoneyFlow({ onComplete }: SendMoneyFlowProps) {
             </div>
 
             {/* Auto advance simulation */}
-            {processingStep < processingSteps.length - 1 && (
-              <div
-                onAnimationIteration={() => setProcessingStep((s) => Math.min(s + 1, processingSteps.length - 1))}
-                className="hidden"
-              />
-            )}
 
             <Button
               onClick={() => {
-                setProcessingStep(processingSteps.length - 1)
-                setTimeout(handleComplete, 500)
+                if (processingStep < processingSteps.length - 1) {
+                  setProcessingStep(processingSteps.length - 1)
+                  setTimeout(() => {
+                    handleNext()
+                  }, 500)
+                } else {
+                  handleNext()
+                }
               }}
               className="w-full"
             >
-              {processingStep === processingSteps.length - 1 ? "View Receipt" : "Simulate Completion"}
+              {processingStep === processingSteps.length - 1 ? "Continue" : "Skip to End"}
             </Button>
           </CardContent>
         </Card>
@@ -360,13 +529,13 @@ export function SendMoneyFlow({ onComplete }: SendMoneyFlowProps) {
             <div className="text-center py-4">
               <p className="text-5xl mb-4">✓</p>
               <p className="text-2xl font-bold text-success">${amount}</p>
-              <p className="text-muted-foreground">sent to {recipientName}</p>
+              <p className="text-muted-foreground">sent to {recipientName || "Recipient"}</p>
             </div>
 
             <div className="space-y-2 bg-muted/50 p-4 rounded-lg text-sm">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Recipient:</span>
-                <span className="font-medium">{recipientName}</span>
+                <span className="font-medium">{recipientName || "N/A"}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Amount:</span>
@@ -378,8 +547,14 @@ export function SendMoneyFlow({ onComplete }: SendMoneyFlowProps) {
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Via:</span>
-                <span className="font-medium">USDC Settlement</span>
+                <span className="font-medium">{selectedRoute ? routes.find((r) => r.id === selectedRoute)?.name : "USDC Settlement"}</span>
               </div>
+              {exchangeRate && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Rate:</span>
+                  <span className="font-medium">1 USD = {exchangeRate.toFixed(2)} {getCurrencyCode(selectedCountry)}</span>
+                </div>
+              )}
               <div className="flex justify-between pt-2 border-t border-border">
                 <span className="text-muted-foreground">Receipt ID:</span>
                 <span className="font-mono text-xs">TX-{Date.now()}</span>

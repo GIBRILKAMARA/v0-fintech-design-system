@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { DashboardScreen } from "./screens/dashboard-screen"
 import { SendMoneyFlow } from "./screens/send-money-flow"
 import { SettingsScreen } from "./screens/settings-screen"
@@ -9,6 +9,20 @@ import { Navigation } from "./navigation"
 
 export function AppShell() {
   const [currentScreen, setCurrentScreen] = useState<"dashboard" | "send" | "history" | "settings">("dashboard")
+
+  useEffect(() => {
+    const handleNavigate = (event: CustomEvent) => {
+      const screen = event.detail as "dashboard" | "send" | "history" | "settings"
+      if (screen) {
+        setCurrentScreen(screen)
+      }
+    }
+
+    window.addEventListener("navigate" as any, handleNavigate as EventListener)
+    return () => {
+      window.removeEventListener("navigate" as any, handleNavigate as EventListener)
+    }
+  }, [])
 
   return (
     <div className="flex flex-col h-screen bg-background">

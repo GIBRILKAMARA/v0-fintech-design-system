@@ -3,9 +3,16 @@
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { useApp } from "@/app/app-provider"
+import { authAPI } from "@/lib/api"
+import { useToast } from "@/hooks/use-toast"
+import { LoadingSpinner } from "@/components/ui/loading-spinner"
 
 export function KYCScreen() {
   const [step, setStep] = useState<"document" | "liveness" | "review" | "complete">("document")
+  const [isLoading, setIsLoading] = useState(false)
+  const { setUser } = useApp()
+  const { toast } = useToast()
 
   const steps = [
     { id: "document", label: "Document", icon: "📄" },
@@ -23,7 +30,13 @@ export function KYCScreen() {
           <div className="text-6xl mb-4">✓</div>
           <h1 className="text-3xl font-bold">Verification Complete</h1>
           <p className="text-muted-foreground">Your account is ready to use. Start sending money now!</p>
-          <Button onClick={() => window.location.reload()} className="w-full">
+          <Button
+            onClick={() => {
+              // Navigation will be handled by the app shell
+              window.location.href = "/"
+            }}
+            className="w-full"
+          >
             Continue to Dashboard
           </Button>
         </div>
@@ -93,13 +106,43 @@ export function KYCScreen() {
             )}
 
             <Button
-              onClick={() => {
-                const nextStep = steps[currentStepIndex + 1]?.id || "complete"
-                setStep(nextStep as any)
+              onClick={async () => {
+                if (step === "review") {
+                  setIsLoading(true)
+                  try {
+                    const user = await authAPI.updateKYCStatus(true)
+                    setUser(user)
+                    toast({
+                      title: "Verification complete!",
+                      description: "Your account is now verified.",
+                      variant: "success",
+                    })
+                    setStep("complete")
+                  } catch (error) {
+                    toast({
+                      title: "Verification failed",
+                      description: "Please try again.",
+                      variant: "destructive",
+                    })
+                  } finally {
+                    setIsLoading(false)
+                  }
+                } else {
+                  const nextStep = steps[currentStepIndex + 1]?.id || "complete"
+                  setStep(nextStep as any)
+                }
               }}
+              disabled={isLoading}
               className="w-full"
             >
-              Continue
+              {isLoading ? (
+                <>
+                  <LoadingSpinner className="mr-2" />
+                  Verifying...
+                </>
+              ) : (
+                "Continue"
+              )}
             </Button>
           </CardContent>
         </Card>

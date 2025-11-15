@@ -2,25 +2,25 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { useApp } from "@/app/app-provider"
 
 export function DashboardScreen() {
-  const { user, transfers } = useApp()
+  const { user, transfers, wallets } = useApp()
 
-  const walletBalances = [
-    { symbol: "USDC", amount: 2450.5, value: "$2,450.50", network: "Polygon" },
-    { symbol: "ETH", amount: 0.85, value: "$2,840.00", network: "Ethereum" },
-    { symbol: "USDT", amount: 1000, value: "$1,000.00", network: "Polygon" },
-  ]
+  const totalBalance = wallets.reduce((sum, wallet) => sum + wallet.value, 0)
+  const totalSent = transfers
+    .filter((t) => t.status === "completed")
+    .reduce((sum, t) => sum + t.amount, 0)
 
   const stats = [
-    { label: "Total Sent", value: `$${transfers.reduce((sum, t) => sum + t.amount, 0).toFixed(2)}`, icon: "✈️" },
+    { label: "Total Sent", value: `$${totalSent.toFixed(2)}`, icon: "✈️" },
     { label: "Transfers", value: transfers.length.toString(), icon: "📊" },
-    { label: "Countries", value: "12", icon: "🌍" },
-    { label: "Avg Speed", value: "2.3min", icon: "⚡" },
+    { label: "Countries", value: new Set(transfers.map((t) => t.country)).size.toString() || "0", icon: "🌍" },
+    { label: "Success Rate", value: transfers.length > 0 ? `${Math.round((transfers.filter((t) => t.status === "completed").length / transfers.length) * 100)}%` : "100%", icon: "⚡" },
   ]
 
-  const recentCountries = ["Nigeria", "Kenya", "Ghana", "Mexico", "Brazil"]
+  const recentCountries = Array.from(new Set(transfers.map((t) => t.country))).slice(0, 5)
 
   return (
     <div className="min-h-screen bg-background p-4 space-y-6">
@@ -37,18 +37,29 @@ export function DashboardScreen() {
             <p className="text-2xl font-bold">Frequently Used</p>
           </div>
           <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
-            {recentCountries.map((country) => (
-              <button
-                key={country}
-                className="px-3 py-2 rounded-lg bg-background border border-border hover:border-primary/50 transition-colors text-sm font-medium whitespace-nowrap"
-              >
-                {country}
-              </button>
-            ))}
+            {recentCountries.length > 0 ? (
+              recentCountries.map((country) => (
+                <button
+                  key={country}
+                  className="px-3 py-2 rounded-lg bg-background border border-border hover:border-primary/50 transition-colors text-sm font-medium whitespace-nowrap"
+                >
+                  {country}
+                </button>
+              ))
+            ) : (
+              <p className="text-sm text-muted-foreground">No recent countries</p>
+            )}
           </div>
-          <button className="w-full bg-primary text-primary-foreground font-semibold py-3 rounded-lg hover:shadow-md transition-all">
+          <Button
+            onClick={() => {
+              // This will be handled by the navigation
+              const event = new CustomEvent("navigate", { detail: "send" })
+              window.dispatchEvent(event)
+            }}
+            className="w-full"
+          >
             Send Money
-          </button>
+          </Button>
         </CardContent>
       </Card>
 
@@ -60,11 +71,11 @@ export function DashboardScreen() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-4xl font-bold">$6,290.50</p>
+          <p className="text-4xl font-bold">${totalBalance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
           <p className="text-sm text-muted-foreground mt-2">Across all wallets</p>
           <div className="mt-4 p-3 bg-muted/50 rounded-lg">
-            <p className="text-xs text-muted-foreground mb-1">Monthly Transfers</p>
-            <p className="text-lg font-semibold">$15,420.00</p>
+            <p className="text-xs text-muted-foreground mb-1">Total Sent (All Time)</p>
+            <p className="text-lg font-semibold">${totalSent.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
           </div>
         </CardContent>
       </Card>
@@ -72,25 +83,33 @@ export function DashboardScreen() {
       <div>
         <h3 className="font-semibold mb-3 text-sm">Wallet Assets</h3>
         <div className="space-y-2">
-          {walletBalances.map((wallet) => (
-            <Card key={wallet.symbol} className="hover:border-primary/50 transition-colors">
-              <CardContent className="pt-4 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center font-bold text-sm text-primary">
-                    {wallet.symbol[0]}
+          {wallets.length > 0 ? (
+            wallets.map((wallet) => (
+              <Card key={wallet.id} className="hover:border-primary/50 transition-colors">
+                <CardContent className="pt-4 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center font-bold text-sm text-primary">
+                      {wallet.symbol[0]}
+                    </div>
+                    <div>
+                      <p className="font-medium">{wallet.symbol}</p>
+                      <p className="text-xs text-muted-foreground">{wallet.network}</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="font-medium">{wallet.symbol}</p>
-                    <p className="text-xs text-muted-foreground">{wallet.network}</p>
+                  <div className="text-right">
+                    <p className="font-semibold">${wallet.value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                    <p className="text-xs text-muted-foreground">{wallet.amount}</p>
                   </div>
-                </div>
-                <div className="text-right">
-                  <p className="font-semibold">{wallet.value}</p>
-                  <p className="text-xs text-muted-foreground">{wallet.amount}</p>
-                </div>
+                </CardContent>
+              </Card>
+            ))
+          ) : (
+            <Card>
+              <CardContent className="pt-6 text-center text-muted-foreground">
+                <p>No wallets yet</p>
               </CardContent>
             </Card>
-          ))}
+          )}
         </div>
       </div>
 

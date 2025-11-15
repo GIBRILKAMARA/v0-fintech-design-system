@@ -65,7 +65,9 @@ export function TransactionHistoryScreen() {
       {/* Transactions */}
       {filteredTransfers.length > 0 ? (
         <div className="space-y-2">
-          {filteredTransfers.map((transfer) => (
+          {filteredTransfers.map((transfer) => {
+            const createdAt = transfer.createdAt instanceof Date ? transfer.createdAt : new Date(transfer.createdAt)
+            return (
             <Card key={transfer.id} className="hover:shadow-sm transition-all cursor-pointer">
               <CardContent className="pt-4">
                 <div className="flex items-center gap-3 mb-3">
@@ -75,7 +77,7 @@ export function TransactionHistoryScreen() {
                   <div className="flex-1">
                     <p className="font-semibold">{transfer.recipient}</p>
                     <p className="text-xs text-muted-foreground">
-                      {transfer.createdAt.toLocaleDateString()} at {transfer.createdAt.toLocaleTimeString()}
+                      {createdAt.toLocaleDateString()} at {createdAt.toLocaleTimeString()}
                     </p>
                   </div>
                   <div className="text-right">
@@ -102,7 +104,8 @@ export function TransactionHistoryScreen() {
                 </div>
               </CardContent>
             </Card>
-          ))}
+            )
+          })}
         </div>
       ) : (
         <Card>

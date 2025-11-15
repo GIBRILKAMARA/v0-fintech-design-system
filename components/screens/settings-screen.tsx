@@ -5,9 +5,11 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useState } from "react"
 import { useApp } from "@/app/app-provider"
+import { useTheme } from "next-themes"
 
 export function SettingsScreen() {
-  const { user, setUser, isDarkMode, setIsDarkMode } = useApp()
+  const { user, setUser } = useApp()
+  const { theme, setTheme } = useTheme()
   const [showWallets, setShowWallets] = useState(false)
   const [showSecurity, setShowSecurity] = useState(false)
 
@@ -80,11 +82,11 @@ export function SettingsScreen() {
           <CardTitle className="text-base">Appearance</CardTitle>
         </CardHeader>
         <CardContent>
-          <label className="flex items-center gap-3 p-2">
+          <label className="flex items-center gap-3 p-2 cursor-pointer">
             <input
               type="checkbox"
-              checked={isDarkMode}
-              onChange={(e) => setIsDarkMode(e.target.checked)}
+              checked={theme === "dark"}
+              onChange={(e) => setTheme(e.target.checked ? "dark" : "light")}
               className="rounded w-4 h-4"
             />
             <span className="text-sm">Dark Mode</span>
