@@ -44,6 +44,7 @@ const SEND_MONEY_STEPS: SendMoneyFlowStep[] = [
 export function SendMoneyFlow({ onComplete, onBack }: SendMoneyFlowProps) {
   const [step, setStep] = useState<SendMoneyFlowStep>("country")
   const [selectedCountry, setSelectedCountry] = useState("")
+  const [countryQuery, setCountryQuery] = useState("")
   const [selectedMethod, setSelectedMethod] = useState("")
   const [recipientName, setRecipientName] = useState("")
   const [recipientAccount, setRecipientAccount] = useState("")
@@ -320,6 +321,11 @@ export function SendMoneyFlow({ onComplete, onBack }: SendMoneyFlowProps) {
     }
   }
 
+  const filteredCountries = countries.filter((country) => {
+    if (!countryQuery.trim()) return true
+    return country.toLowerCase().includes(countryQuery.trim().toLowerCase())
+  })
+
   return (
     <div className="min-h-screen bg-background p-4 space-y-6">
       {/* Progress */}
@@ -346,19 +352,33 @@ export function SendMoneyFlow({ onComplete, onBack }: SendMoneyFlowProps) {
           <CardHeader>
             <CardTitle>Select Destination Country</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-2">
-            {countries.map((country) => (
-              <button
-                key={country}
-                onClick={() => setSelectedCountry(country)}
-                className={`w-full p-3 rounded-lg border text-left transition-colors ${
-                  selectedCountry === country ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"
-                }`}
-              >
-                {country}
-              </button>
-            ))}
-            <Button onClick={handleComplete} disabled={!selectedCountry} className="w-full mt-4">
+          <CardContent className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium mb-2">Search country</label>
+              <Input
+                placeholder="Start typing to filter countries"
+                value={countryQuery}
+                onChange={(e) => setCountryQuery(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2 max-h-80 overflow-y-auto">
+              {filteredCountries.length > 0 ? (
+                filteredCountries.map((country) => (
+                  <button
+                    key={country}
+                    onClick={() => setSelectedCountry(country)}
+                    className={`w-full p-3 rounded-lg border text-left transition-colors ${
+                      selectedCountry === country ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"
+                    }`}
+                  >
+                    {country}
+                  </button>
+                ))
+              ) : (
+                <p className="text-sm text-muted-foreground">No countries match your search.</p>
+              )}
+            </div>
+            <Button onClick={handleComplete} disabled={!selectedCountry} className="w-full mt-2">
               Next
             </Button>
           </CardContent>
