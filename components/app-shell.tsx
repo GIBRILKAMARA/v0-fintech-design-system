@@ -29,7 +29,12 @@ export function AppShell() {
       {/* Main Content */}
       <div className="flex-1 overflow-auto">
         {currentScreen === "dashboard" && <DashboardScreen />}
-        {currentScreen === "send" && <SendMoneyFlow onComplete={() => setCurrentScreen("history")} />}
+        {currentScreen === "send" && (
+          <SendMoneyFlow
+            onComplete={() => setCurrentScreen("history")}
+            onBack={() => setCurrentScreen("dashboard")}
+          />
+        )}
         {currentScreen === "history" && <TransactionHistoryScreen />}
         {currentScreen === "settings" && <SettingsScreen />}
       </div>

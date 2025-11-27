@@ -45,7 +45,7 @@ export function SignupScreen({ onBack }: SignupScreenProps) {
       setUser(user)
       toast({
         title: "Account created!",
-        description: "Welcome to FlowPay. Let's verify your identity.",
+        description: "Welcome to Moneyfer. Let's verify your identity.",
         variant: "success",
       })
       setStep("kyc")

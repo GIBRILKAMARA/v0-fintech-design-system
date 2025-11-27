@@ -23,7 +23,7 @@ export function SplashScreen() {
       <div className="text-center space-y-8 max-w-md">
         {/* Logo */}
         <div>
-          <h1 className="text-5xl font-bold text-primary mb-2">FlowPay</h1>
+          <h1 className="text-5xl font-bold text-primary mb-2">Moneyfer</h1>
           <p className="text-muted-foreground text-lg">Global payments at local speed</p>
         </div>
 

@@ -1,4 +1,4 @@
-# FlowPay - Cross-Border Payments Platform
+# Moneyfer - Cross-Border Payments Platform
 
 A modern, full-featured fintech application for cross-border payments using stablecoins and local settlement. Built with Next.js, TypeScript, and Tailwind CSS.
 
@@ -24,7 +24,7 @@ A modern, full-featured fintech application for cross-border payments using stab
 ## 📁 Project Structure
 
 ```
-flowpay/
+moneyfer/
 ├── app/
 │   ├── app-provider.tsx      # Global state management
 │   ├── globals.css           # Global styles and theme

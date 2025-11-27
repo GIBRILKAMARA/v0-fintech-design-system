@@ -14,7 +14,7 @@ function AppContent() {
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center space-y-4">
           <LoadingSpinner className="h-8 w-8 mx-auto" />
-          <p className="text-muted-foreground">Loading FlowPay...</p>
+          <p className="text-muted-foreground">Loading Moneyfer...</p>
         </div>
       </div>
     )

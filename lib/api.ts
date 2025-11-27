@@ -1,4 +1,4 @@
-// Mock API layer for FlowPay
+// Mock API layer for Moneyfer
 // In a real app, these would be actual API calls
 
 export type User = {
@@ -28,7 +28,7 @@ export type Transfer = {
   toCurrency: string
   rate: number
   fee: number
-  status: "pending" | "processing" | "completed" | "failed"
+  status: "pending" | "processing" | "completed" | "failed" | "reversed"
   createdAt: Date
   country: string
   method: string
@@ -258,6 +258,11 @@ export const transferAPI = {
     setStorage(STORAGE_KEYS.TRANSFERS, updatedTransfers)
     
     return updated
+  },
+
+  async reverseTransfer(transferId: string): Promise<Transfer> {
+    // Convenience helper for reversing a transfer
+    return this.updateTransferStatus(transferId, "reversed")
   },
 }
 
