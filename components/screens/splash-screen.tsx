@@ -37,9 +37,9 @@ export function SplashScreen() {
             </div>
           </div>
           <div className="flex items-start gap-3">
-            <span className="text-2xl">🌍</span>
+            <span className="text-2xl">30d</span>
             <div>
-              <p className="font-semibold">180+ Countries</p>
+              <p className="font-semibold">60+ Countries</p>
               <p className="text-sm text-muted-foreground">Available worldwide</p>
             </div>
           </div>

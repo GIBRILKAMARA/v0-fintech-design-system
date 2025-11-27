@@ -7,7 +7,7 @@ A modern, full-featured fintech application for cross-border payments using stab
 ### Core Functionality
 - **User Authentication**: Secure login and signup with form validation
 - **KYC Verification**: Multi-step identity verification process
-- **Cross-Border Transfers**: Send money to 180+ countries
+- **Cross-Border Transfers**: Send money to 60+ countries
 - **Real-time Exchange Rates**: Dynamic rate fetching based on destination country
 - **Transaction History**: Complete history with filtering and search
 - **Wallet Management**: Multi-wallet support (USDC, ETH, USDT)
