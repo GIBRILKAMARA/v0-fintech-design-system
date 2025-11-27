@@ -46,6 +46,7 @@ export function SendMoneyFlow({ onComplete, onBack }: SendMoneyFlowProps) {
   const [selectedCountry, setSelectedCountry] = useState("")
   const [countryQuery, setCountryQuery] = useState("")
   const [selectedMethod, setSelectedMethod] = useState("")
+  const [sierraLeoneBank, setSierraLeoneBank] = useState("")
   const [recipientName, setRecipientName] = useState("")
   const [recipientAccount, setRecipientAccount] = useState("")
   const [amount, setAmount] = useState("")
@@ -137,7 +138,23 @@ export function SendMoneyFlow({ onComplete, onBack }: SendMoneyFlowProps) {
     "Australia",
     "New Zealand",
   ]
-  const methods = ["Mobile Money", "Bank Transfer", "Wallet"]
+
+  const getPayoutMethods = (country: string): string[] => {
+    if (country === "Sierra Leone") {
+      return ["Afrimoney", "Orange Money", "Bank - Sierra Leone"]
+    }
+    return ["Mobile Money", "Bank Transfer", "Wallet"]
+  }
+
+  const sierraLeoneBanks = [
+    "Sierra Leone Commercial Bank",
+    "United Bank Of Africa",
+    "Rokel Commercial Bank",
+    "Eco Bank",
+    "Guarantee Trust Bank",
+    "Other Bank (Sierra Leone)",
+  ]
+
   const paymentMethods = ["USDC", "Card", "Bank Account"]
 
   // Get currency code based on country
@@ -235,6 +252,12 @@ export function SendMoneyFlow({ onComplete, onBack }: SendMoneyFlowProps) {
         })
     }
   }, [selectedCountry, step, toast])
+
+  // Reset payout method and bank when country changes
+  useEffect(() => {
+    setSelectedMethod("")
+    setSierraLeoneBank("")
+  }, [selectedCountry])
 
   // Auto-advance processing steps
   useEffect(() => {
@@ -390,9 +413,14 @@ export function SendMoneyFlow({ onComplete, onBack }: SendMoneyFlowProps) {
         <Card>
           <CardHeader>
             <CardTitle>Select Payout Method</CardTitle>
+            {selectedCountry === "Sierra Leone" && (
+              <p className="text-sm text-muted-foreground mt-1">
+                Cash out via Afrimoney, Orange Money, or local banks in Sierra Leone.
+              </p>
+            )}
           </CardHeader>
           <CardContent className="space-y-2">
-            {methods.map((method) => (
+            {getPayoutMethods(selectedCountry).map((method) => (
               <button
                 key={method}
                 onClick={() => setSelectedMethod(method)}
@@ -425,6 +453,29 @@ export function SendMoneyFlow({ onComplete, onBack }: SendMoneyFlowProps) {
                 onChange={(e) => setRecipientName(e.target.value)}
               />
             </div>
+
+            {selectedCountry === "Sierra Leone" && selectedMethod === "Bank - Sierra Leone" && (
+              <div>
+                <label className="block text-sm font-medium mb-2">Select Bank</label>
+                <div className="space-y-2">
+                  {sierraLeoneBanks.map((bank) => (
+                    <button
+                      key={bank}
+                      type="button"
+                      onClick={() => setSierraLeoneBank(bank)}
+                      className={`w-full p-3 rounded-lg border text-left transition-colors ${
+                        sierraLeoneBank === bank
+                          ? "border-primary bg-primary/5"
+                          : "border-border hover:border-primary/50"
+                      }`}
+                    >
+                      {bank}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div>
               <label className="block text-sm font-medium mb-2">Account Number</label>
               <Input
@@ -438,6 +489,18 @@ export function SendMoneyFlow({ onComplete, onBack }: SendMoneyFlowProps) {
                 const form = { recipientName, recipientAccount }
                 const result = recipientSchema.safeParse(form)
                 if (result.success) {
+                  if (
+                    selectedCountry === "Sierra Leone" &&
+                    selectedMethod === "Bank - Sierra Leone" &&
+                    !sierraLeoneBank
+                  ) {
+                    toast({
+                      title: "Select bank",
+                      description: "Please choose a Sierra Leone bank for cash out.",
+                      variant: "destructive",
+                    })
+                    return
+                  }
                   handleNext()
                 } else {
                   const error = result.error.errors[0]
@@ -714,6 +777,10 @@ export function SendMoneyFlow({ onComplete, onBack }: SendMoneyFlowProps) {
                 <span className="font-medium">{selectedCountry}</span>
               </div>
               <div className="flex justify-between">
+                <span className="text-muted-foreground">Method:</span>
+                <span className="font-medium">{selectedMethod || "N/A"}</span>
+              </div>
+              <div className="flex justify-between">
                 <span className="text-muted-foreground">Via:</span>
                 <span className="font-medium">{selectedRoute ? routes.find((r) => r.id === selectedRoute)?.name : "USDC Settlement"}</span>
               </div>
@@ -723,6 +790,14 @@ export function SendMoneyFlow({ onComplete, onBack }: SendMoneyFlowProps) {
                   <span className="font-medium">1 USD = {exchangeRate.toFixed(2)} {getCurrencyCode(selectedCountry)}</span>
                 </div>
               )}
+              {selectedCountry === "Sierra Leone" &&
+                selectedMethod === "Bank - Sierra Leone" &&
+                sierraLeoneBank && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Bank:</span>
+                    <span className="font-medium">{sierraLeoneBank}</span>
+                  </div>
+                )}
               <div className="flex justify-between pt-2 border-t border-border">
                 <span className="text-muted-foreground">Receipt ID:</span>
                 <span className="font-mono text-xs">TX-{Date.now()}</span>
