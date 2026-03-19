@@ -8,6 +8,42 @@ export type User = {
   kycVerified: boolean
   walletAddress?: string
   createdAt: Date
+  pin?: string
+  pinSet: boolean
+}
+
+export type TransactionType = "transfer" | "airtime" | "bills" | "topup" | "request"
+
+export type Transaction = {
+  id: string
+  type: TransactionType
+  amount: number
+  currency: string
+  status: "pending" | "processing" | "completed" | "failed" | "reversed"
+  createdAt: Date
+  description: string
+  category?: string
+  metadata?: Record<string, unknown>
+}
+
+export type AirtimeTransaction = Transaction & {
+  type: "airtime"
+  phoneNumber: string
+  provider: string
+  country: string
+}
+
+export type BillTransaction = Transaction & {
+  type: "bills"
+  billType: "electricity" | "water" | "internet" | "tv" | "other"
+  accountNumber: string
+  provider: string
+}
+
+export type TopupTransaction = Transaction & {
+  type: "topup"
+  method: "card" | "bank" | "crypto"
+  reference?: string
 }
 
 export type Wallet = {
@@ -49,6 +85,8 @@ const STORAGE_KEYS = {
   TRANSFERS: "flowpay_transfers",
   WALLETS: "flowpay_wallets",
   SESSION: "flowpay_session",
+  TRANSACTIONS: "flowpay_transactions",
+  PIN: "flowpay_pin",
 } as const
 
 // Helper functions for localStorage
@@ -291,5 +329,199 @@ export const exchangeRateAPI = {
       timestamp: new Date(),
     }
   },
+}
+
+// PIN API
+export const pinAPI = {
+  async setPin(pin: string): Promise<void> {
+    await delay(300)
+    if (pin.length !== 4 || !/^\d{4}$/.test(pin)) {
+      throw new Error("PIN must be exactly 4 digits")
+    }
+    setStorage(STORAGE_KEYS.PIN, pin)
+    
+    // Update user to mark PIN as set
+    const user = getStorage<User>(STORAGE_KEYS.USER)
+    if (user) {
+      setStorage(STORAGE_KEYS.USER, { ...user, pinSet: true })
+    }
+  },
+
+  async verifyPin(pin: string): Promise<boolean> {
+    await delay(200)
+    const storedPin = getStorage<string>(STORAGE_KEYS.PIN)
+    return storedPin === pin
+  },
+
+  async changePin(oldPin: string, newPin: string): Promise<void> {
+    await delay(300)
+    const isValid = await this.verifyPin(oldPin)
+    if (!isValid) {
+      throw new Error("Current PIN is incorrect")
+    }
+    await this.setPin(newPin)
+  },
+
+  async isPinSet(): Promise<boolean> {
+    await delay(100)
+    const pin = getStorage<string>(STORAGE_KEYS.PIN)
+    return !!pin
+  },
+}
+
+// Transaction API (unified for all transaction types)
+export const transactionAPI = {
+  async getTransactions(): Promise<Transaction[]> {
+    await delay(200)
+    const stored = getStorage<Transaction[]>(STORAGE_KEYS.TRANSACTIONS)
+    if (!stored) return []
+    
+    return stored.map((tx) => ({
+      ...tx,
+      createdAt: tx.createdAt instanceof Date ? tx.createdAt : new Date(tx.createdAt),
+    }))
+  },
+
+  async createTransaction(tx: Omit<Transaction, "id" | "createdAt" | "status">): Promise<Transaction> {
+    await delay(500)
+    
+    const newTx: Transaction = {
+      ...tx,
+      id: `tx-${Date.now()}`,
+      status: "pending",
+      createdAt: new Date(),
+    }
+    
+    const transactions = await this.getTransactions()
+    setStorage(STORAGE_KEYS.TRANSACTIONS, [newTx, ...transactions])
+    
+    return newTx
+  },
+
+  async updateTransactionStatus(txId: string, status: Transaction["status"]): Promise<Transaction> {
+    await delay(300)
+    const transactions = await this.getTransactions()
+    const tx = transactions.find((t) => t.id === txId)
+    
+    if (!tx) throw new Error("Transaction not found")
+    
+    const updated = { ...tx, status }
+    const updatedTxs = transactions.map((t) => (t.id === txId ? updated : t))
+    setStorage(STORAGE_KEYS.TRANSACTIONS, updatedTxs)
+    
+    return updated
+  },
+
+  async buyAirtime(data: { phoneNumber: string; amount: number; provider: string; country: string }): Promise<AirtimeTransaction> {
+    await delay(800)
+    
+    const tx: AirtimeTransaction = {
+      id: `airtime-${Date.now()}`,
+      type: "airtime",
+      amount: data.amount,
+      currency: "USD",
+      status: "completed",
+      createdAt: new Date(),
+      description: `Airtime - ${data.provider}`,
+      phoneNumber: data.phoneNumber,
+      provider: data.provider,
+      country: data.country,
+      category: "airtime",
+    }
+    
+    const transactions = await this.getTransactions()
+    setStorage(STORAGE_KEYS.TRANSACTIONS, [tx, ...transactions])
+    
+    return tx
+  },
+
+  async payBill(data: { billType: BillTransaction["billType"]; accountNumber: string; amount: number; provider: string }): Promise<BillTransaction> {
+    await delay(800)
+    
+    const tx: BillTransaction = {
+      id: `bill-${Date.now()}`,
+      type: "bills",
+      amount: data.amount,
+      currency: "USD",
+      status: "completed",
+      createdAt: new Date(),
+      description: `${data.billType.charAt(0).toUpperCase() + data.billType.slice(1)} Bill - ${data.provider}`,
+      billType: data.billType,
+      accountNumber: data.accountNumber,
+      provider: data.provider,
+      category: "bills",
+    }
+    
+    const transactions = await this.getTransactions()
+    setStorage(STORAGE_KEYS.TRANSACTIONS, [tx, ...transactions])
+    
+    return tx
+  },
+
+  async topUp(data: { amount: number; method: TopupTransaction["method"] }): Promise<TopupTransaction> {
+    await delay(800)
+    
+    const tx: TopupTransaction = {
+      id: `topup-${Date.now()}`,
+      type: "topup",
+      amount: data.amount,
+      currency: "USD",
+      status: "completed",
+      createdAt: new Date(),
+      description: `Wallet Top-up via ${data.method}`,
+      method: data.method,
+      reference: `REF-${Date.now()}`,
+      category: "topup",
+    }
+    
+    const transactions = await this.getTransactions()
+    setStorage(STORAGE_KEYS.TRANSACTIONS, [tx, ...transactions])
+    
+    return tx
+  },
+}
+
+// Airtime Providers
+export const airtimeProviders = {
+  NG: [
+    { id: "mtn", name: "MTN", logo: "M" },
+    { id: "airtel", name: "Airtel", logo: "A" },
+    { id: "glo", name: "Glo", logo: "G" },
+    { id: "9mobile", name: "9mobile", logo: "9" },
+  ],
+  KE: [
+    { id: "safaricom", name: "Safaricom", logo: "S" },
+    { id: "airtel-ke", name: "Airtel", logo: "A" },
+    { id: "telkom", name: "Telkom", logo: "T" },
+  ],
+  GH: [
+    { id: "mtn-gh", name: "MTN", logo: "M" },
+    { id: "vodafone", name: "Vodafone", logo: "V" },
+    { id: "airteltigo", name: "AirtelTigo", logo: "A" },
+  ],
+}
+
+// Bill Providers
+export const billProviders = {
+  electricity: [
+    { id: "eko", name: "Eko Electric", logo: "E" },
+    { id: "ikeja", name: "Ikeja Electric", logo: "I" },
+    { id: "abuja", name: "Abuja Electric", logo: "A" },
+  ],
+  water: [
+    { id: "lagos-water", name: "Lagos Water Corp", logo: "L" },
+    { id: "fct-water", name: "FCT Water Board", logo: "F" },
+  ],
+  internet: [
+    { id: "spectranet", name: "Spectranet", logo: "S" },
+    { id: "smile", name: "Smile", logo: "S" },
+    { id: "swift", name: "Swift Networks", logo: "S" },
+  ],
+  tv: [
+    { id: "dstv", name: "DSTV", logo: "D" },
+    { id: "gotv", name: "GOtv", logo: "G" },
+    { id: "startimes", name: "StarTimes", logo: "S" },
+  ],
+  other: [],
 }
 

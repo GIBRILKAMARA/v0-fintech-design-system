@@ -3,7 +3,7 @@
 import type React from "react"
 
 import { createContext, useContext, useState, useEffect } from "react"
-import { authAPI, transferAPI, walletAPI, type User, type Transfer, type Wallet } from "@/lib/api"
+import { authAPI, transferAPI, walletAPI, pinAPI, transactionAPI, type User, type Transfer, type Wallet, type Transaction } from "@/lib/api"
 
 type AppContextType = {
   user: User | null
@@ -13,6 +13,15 @@ type AppContextType = {
   refreshTransfers: () => Promise<void>
   wallets: Wallet[]
   refreshWallets: () => Promise<void>
+  updateWalletBalance: (walletId: string, newAmount: number) => Promise<void>
+  transactions: Transaction[]
+  addTransaction: (tx: Transaction) => void
+  refreshTransactions: () => Promise<void>
+  isPinSet: boolean
+  isPinVerified: boolean
+  setIsPinVerified: (verified: boolean) => void
+  verifyPin: (pin: string) => Promise<boolean>
+  setPin: (pin: string) => Promise<void>
   isLoading: boolean
 }
 
@@ -22,6 +31,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [transfers, setTransfers] = useState<Transfer[]>([])
   const [wallets, setWallets] = useState<Wallet[]>([])
+  const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [isPinSet, setIsPinSet] = useState(false)
+  const [isPinVerified, setIsPinVerified] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
 
   // Load initial data
@@ -41,6 +53,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         // Load wallets
         const loadedWallets = await walletAPI.getWallets()
         setWallets(loadedWallets)
+
+        // Load transactions
+        const loadedTransactions = await transactionAPI.getTransactions()
+        setTransactions(loadedTransactions)
+
+        // Check if PIN is set
+        const pinSet = await pinAPI.isPinSet()
+        setIsPinSet(pinSet)
       } catch (error) {
         console.error("Failed to load initial data:", error)
       } finally {
@@ -69,8 +89,45 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  const updateWalletBalance = async (walletId: string, newAmount: number) => {
+    try {
+      await walletAPI.updateWallet(walletId, newAmount)
+      await refreshWallets()
+    } catch (error) {
+      console.error("Failed to update wallet balance:", error)
+      throw error
+    }
+  }
+
+  const refreshTransactions = async () => {
+    try {
+      const loadedTransactions = await transactionAPI.getTransactions()
+      setTransactions(loadedTransactions)
+    } catch (error) {
+      console.error("Failed to refresh transactions:", error)
+    }
+  }
+
+  const addTransaction = (tx: Transaction) => {
+    setTransactions([tx, ...transactions])
+  }
+
   const addTransfer = (transfer: Transfer) => {
     setTransfers([transfer, ...transfers])
+  }
+
+  const verifyPin = async (pin: string): Promise<boolean> => {
+    const isValid = await pinAPI.verifyPin(pin)
+    if (isValid) {
+      setIsPinVerified(true)
+    }
+    return isValid
+  }
+
+  const handleSetPin = async (pin: string): Promise<void> => {
+    await pinAPI.setPin(pin)
+    setIsPinSet(true)
+    setIsPinVerified(true)
   }
 
   const handleSetUser = async (newUser: User | null) => {
@@ -97,6 +154,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         refreshTransfers,
         wallets,
         refreshWallets,
+        updateWalletBalance,
+        transactions,
+        addTransaction,
+        refreshTransactions,
+        isPinSet,
+        isPinVerified,
+        setIsPinVerified,
+        verifyPin,
+        setPin: handleSetPin,
         isLoading,
       }}
     >
